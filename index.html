@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Текст песни: управление</title>
+</head>
+<body>
+<div class="row">
+  <button class="b main" id="pp">Старт</button>
+  <button class="b" id="rs">Сначала</button>
+  <button class="b" id="fa">Песня</button>
+  <input id="q" placeholder="Исполнитель и название" aria-label="Поиск текста">
+  <button class="b" id="sr">Найти текст</button>
+  <label class="b">Открыть .lrc<input id="fl" type="file" accept=".lrc,.txt"></label>
+  <button class="b" id="dlrc" disabled>Скачать .lrc</button>
+  <button class="b" id="mk">Разметить вручную</button>
+  <button class="b" id="win">Открыть окно текста</button>
+</div>
+<div class="row set">
+  <label>Шрифт <input id="sc" type="range" min="50" max="220" step="5"><output id="sco"></output></label>
+  <label>Ширина окна <input id="pw" type="range" min="30" max="100"><output id="pwo"></output></label>
+  <label>Высота окна <input id="ph" type="range" min="50" max="250" step="5"><output id="pho"></output></label>
+  <label>Размытие <input id="bl" type="range" min="0" max="40"><output id="blo"></output></label>
+  <label>Затемнение <input id="tn" type="range" min="0" max="90"><output id="tno"></output></label>
+</div>
+<div class="row set">
+  <button class="b" id="fb">Фон: картинка или видео</button>
+  <button class="b" id="fx">Убрать фон</button>
+  <label><input id="bgp" type="checkbox"> Фон в превью</label>
+  <label><input id="bgw" type="checkbox"> Фон в окне текста</label>
+  <label><input id="tsh" type="checkbox"> Показывать таймер</label>
+  <label>Таймер (мм:сс) <input id="tt" value="05:00" aria-label="Время таймера"></label>
+  <label>Положение <select id="tpos"><option value="tl">Сверху слева</option><option value="tc">Сверху по центру</option><option value="tr">Сверху справа</option><option value="bl">Снизу слева</option><option value="bc">Снизу по центру</option><option value="br">Снизу справа</option></select></label>
+  <button class="b" id="m">Текст −0,5 с</button><button class="b" id="p">Текст +0,5 с</button>
+</div>
+<div id="st"></div>
+<div id="vs"></div>
+<div id="pan" hidden>
+  <textarea id="txt" placeholder="Вставь обычный текст песни: одна строка на строку"></textarea>
+  <div class="panrow">
+    <button class="b" id="go">Начать с начала песни</button>
+    <button class="b" id="tap">Отметить строку (пробел)</button>
+    <span id="hint"></span>
+  </div>
+</div>
+<div id="pv"></div>
+<div id="foot"><audio id="au" controls></audio></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

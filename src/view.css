@@ -1,0 +1,36 @@
+:root{--bg:#1c1526;--fg:#fff;--dim:#a99bbd;--acc:#ffe066}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{color:var(--fg);font:600 16px/1.3 system-ui,"Segoe UI",sans-serif}
+body.pop{background:#000;overflow:hidden}
+#root{width:100%;height:100%}
+
+/* отображение (общее для превью и окна текста) */
+.view{position:relative;overflow:hidden;width:100%;height:100%;flex:1;background:radial-gradient(120% 90% at 50% 40%,#3a2a52,#1c1526);--fs:48px;--tint:.45;--pw:94;--ph:1}
+.view .bg{position:absolute;inset:0;background-size:cover;background-position:center}
+.view .bg video{width:100%;height:100%;object-fit:cover}
+.view.nobg .bg,.view.nobg .pc{display:none}
+.view .panel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:calc(var(--pw) * 1%);height:min(96%,calc(var(--fs) * 4.6 * var(--ph)));border-radius:calc(var(--fs) * .5);overflow:hidden;border:1px solid #ffffff1f}
+.view .pc{position:absolute;max-width:none}
+.view .pt{position:absolute;inset:0;background:rgba(12,8,22,var(--tint))}
+.view.hastm .panel{top:calc(50% + var(--fs) * .6)}
+.view.pos-b .tm{top:auto;bottom:calc(var(--fs) * .2)}
+.view.pos-l .tm{left:calc(var(--fs) * .3);transform:none}
+.view.pos-r .tm{left:auto;right:calc(var(--fs) * .3);transform:none}
+.view.hastm.pos-b .panel{top:calc(50% - var(--fs) * .6)}
+.view .list{position:absolute;left:0;right:0;top:50%;transition:transform .6s cubic-bezier(.3,.7,.2,1)}
+.view .l{padding:.15em 5%;text-align:center;font-size:var(--fs);font-weight:800;line-height:1.15;color:var(--dim);opacity:0;transform:scale(.55);transition:transform .6s cubic-bezier(.3,.7,.2,1),opacity .5s,color .5s;cursor:pointer;overflow-wrap:anywhere}
+.view .l.near{opacity:.5}
+.view .l.cur{opacity:1;transform:scale(1);color:#fff;text-shadow:0 2px 24px #0006}
+.view .empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:#fff;font-size:calc(var(--fs) * .4);pointer-events:none}
+
+/* таймер обратного отсчёта */
+.view .tm{display:none;position:absolute;top:calc(var(--fs) * .2);left:50%;transform:translateX(-50%);height:calc(var(--fs) * 1.1);aspect-ratio:1;place-items:center;border-radius:50%;background:rgba(12,8,22,.6)}
+.view.hastm .tm{display:grid}
+.view .tm svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.view .tm circle{fill:none;stroke-width:6}
+.view .tm .trk{stroke:#ffffff2e}
+.view .tm .arc{stroke:var(--acc);stroke-linecap:round;stroke-dasharray:100;transition:stroke-dashoffset .12s linear,stroke .4s}
+.view .tm.done .arc{stroke:#fff}
+.view .tt{font-size:calc(var(--fs) * .3);font-weight:800;font-variant-numeric:tabular-nums;color:#fff}
+@media (prefers-reduced-motion:reduce){.view .list,.view .l,.view .tm .arc{transition:none}}
