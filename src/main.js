@@ -12,7 +12,7 @@ import { EV } from './bus.js';
 const $ = s => document.querySelector(s), au = $('#au');
 const st = t => $('#st').textContent = t;
 let L = [], off = 0, M = null, meta = null, bgPath = null, bgVid = false, playing = false;
-let S = { scale: 100, blur: 18, tint: 45, pw: 94, ph: 100, tsh: false, tt: '05:00', tpos: 'tc', bgprev: true, bgpop: true };
+let S = { scale: 100, blur: 18, tint: 45, pw: 94, ph: 100, tsh: false, tt: '05:00', tpos: 'tc', bgshow: true };
 try { Object.assign(S, JSON.parse(localStorage.getItem('lyr') || '{}')); } catch (e) {}
 const saveS = () => { try { localStorage.setItem('lyr', JSON.stringify(S)); } catch (x) {} };
 const VIDEO_RE = /\.(mp4|m4v|webm|mov|mkv|ogv|avi)$/i;
@@ -39,13 +39,10 @@ const pv = Display($('#pv'), {
   onSeek: t => { au.currentTime = t; },
   getTime: () => au.currentTime,
   status: st,
-  onVideoReady: () => syncVideos(),
 });
 
 let lastHb = -1e9, popStat = null;
 const popOpen = () => performance.now() - lastHb < 2000;
-/* видео играет только там, где его реально смотрят: в окне текста, а если оно закрыто, то в превью */
-const syncVideos = () => pv.keep(playing && !popOpen());
 
 const pushLines = () => emit(EV.lines, { lines: L });
 const pushBg = () => emit(EV.bg, bgPath ? { path: bgPath, vid: bgVid } : null);
@@ -56,6 +53,7 @@ const pushAll = () => { pushSet(); pushLines(); pushBg(); pushTick(); };
 listen(EV.ready, () => { lastHb = performance.now(); pushAll(); });
 listen(EV.hb, e => { lastHb = performance.now(); popStat = e.payload && e.payload.s; });
 listen(EV.seekreq, e => { au.currentTime = e.payload.t; });
+listen(EV.status, e => st(e.payload.msg));
 
 async function openPop() {
   try {
@@ -63,7 +61,7 @@ async function openPop() {
     if (ex) { await ex.setFocus(); return; }
     const w = new WebviewWindow('lyrics', { url: 'lyrics-view.html', title: 'Текст песни', width: 1100, height: 620, center: true });
     w.once('tauri://error', e => st('Не удалось открыть окно текста: ' + (e.payload || '')));
-    w.once('tauri://destroyed', () => { lastHb = -1e9; popStat = null; syncVideos(); });
+    w.once('tauri://destroyed', () => { lastHb = -1e9; popStat = null; });
     st('Окно текста открыто. Его можно перетащить на другой монитор или развернуть на весь экран (F11).');
   } catch (e) { st('Не удалось открыть окно текста: ' + e); }
 }
@@ -72,21 +70,21 @@ $('#win').onclick = openPop;
 /* ---------- общий запуск: музыка + видео + таймер ---------- */
 function go() {
   playing = true; $('#pp').textContent = 'Пауза';
-  syncVideos(); tm.run();
+  tm.run();
   if (au.src && au.paused) au.play().catch(() => {});
   pushTick();
 }
 function halt() {
   playing = false; $('#pp').textContent = 'Старт';
-  syncVideos(); tm.pause();
+  tm.pause();
   if (!au.paused) au.pause();
   pushTick();
 }
 $('#pp').onclick = () => playing ? halt() : go();
-$('#rs').onclick = () => { halt(); au.currentTime = 0; tm.reset(); pv.seek(0); emit(EV.seek, { t: 0 }); pushTick(); };
+$('#rs').onclick = () => { halt(); au.currentTime = 0; tm.reset(); emit(EV.seek, { t: 0 }); pushTick(); };
 au.onplay = () => { if (!playing) go(); };
 au.onpause = () => { if (playing && !au.ended) halt(); };
-au.onseeked = () => { pv.seek(au.currentTime); emit(EV.seek, { t: au.currentTime }); pushTick(); };
+au.onseeked = () => { emit(EV.seek, { t: au.currentTime }); pushTick(); };
 
 /* ---------- текст и время ---------- */
 function parse(t) {
@@ -106,9 +104,8 @@ setInterval(() => {
   const i = findLine(L, au.currentTime + off), r = tm.value();
   pv.fit(); pv.show(i); pv.timer(r, tm.total);
   n++;
-  if (n % 6 === 0) syncVideos(); /* раз в ~0,5 с: если видео остановилось само, запускаем снова */
   if (n % 12 === 0) {
-    const s = popOpen() ? popStat : pv.stat();
+    const s = popOpen() ? popStat : null;
     $('#vs').textContent = s ? `Видео: ${s.w}×${s.h}, ${s.e ? 'ошибка ' + s.e : s.p ? 'пауза' : s.rs < 3 ? 'буферизация' : 'играет'}, ${s.t.toFixed(1)} с, пропущено кадров ${s.d} из ${s.n}` : '';
   }
 }, 80);
@@ -180,22 +177,18 @@ $('#p').onclick = () => { off += .5; st('Сдвиг текста: ' + off.toFixe
 });
 $('#fb').onclick = async () => {
   try {
-    const p = await open({ multiple: false, filters: [{ name: 'Картинка или видео', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif', 'bmp', 'mp4', 'm4v', 'webm', 'mov', 'mkv', 'ogv'] }] });
+    const p = await open({ multiple: false, filters: [{ name: 'Фон окна текста: картинка или видео', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif', 'bmp', 'mp4', 'm4v', 'webm', 'mov', 'mkv', 'ogv'] }] });
     if (!p) return;
     bgPath = p; bgVid = VIDEO_RE.test(p);
-    pv.bg(convertFileSrc(p), bgVid); pushBg(); syncVideos();
+    pushBg(); st('Фон выбран. Он виден только в окне текста.');
   } catch (e) { st('Не удалось открыть фон: ' + e); }
 };
-$('#fx').onclick = () => { bgPath = null; pv.bg(null); pushBg(); };
+$('#fx').onclick = () => { bgPath = null; pushBg(); };
 $('#tsh').checked = !!S.tsh;
 $('#tsh').onchange = e => { S.tsh = e.target.checked; saveS(); pv.style(); pushSet(); };
 $('#tt').value = S.tt;
 $('#tpos').value = S.tpos || 'tc';
 $('#tpos').onchange = e => { S.tpos = e.target.value; saveS(); pv.style(); pushSet(); };
-[['bgp', 'bgprev'], ['bgw', 'bgpop']].forEach(([id, k]) => {
-  const e = $('#' + id); e.checked = S[k] !== false;
-  e.onchange = () => { S[k] = e.checked; saveS(); pv.style(); syncVideos(); pushSet(); };
-});
 tm.set(pt(S.tt) || 300000); tm.reset();
 $('#tt').onchange = e => {
   const ms = pt(e.target.value);

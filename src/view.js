@@ -6,7 +6,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Display, findLine } from './display.js';
 import { EV } from './bus.js';
 
-let S = { scale: 100, blur: 18, tint: 45, pw: 94, ph: 100, tsh: false, tt: '05:00', tpos: 'tc', bgprev: true, bgpop: true };
+let S = { scale: 100, blur: 18, tint: 45, pw: 94, ph: 100, tsh: false, tt: '05:00', tpos: 'tc', bgshow: true };
 let L = [], off = 0, wasPlaying = false;
 let base = { t: 0, playing: false, at: performance.now() };      // время аудио, пришедшее из главного окна
 let tmr = { v: 0, total: 0, on: false, at: performance.now() };  // таймер обратного отсчёта
@@ -19,8 +19,7 @@ const d = Display(document.getElementById('root'), {
   S: () => S,
   onSeek: t => emit(EV.seekreq, { t }),
   getTime: audioTime,
-  status: m => console.warn(m),
-  onVideoReady: () => d.keep(base.playing),
+  status: m => emit(EV.status, { msg: m }),
 });
 
 (async () => {

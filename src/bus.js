@@ -8,4 +8,5 @@ export const EV = {
   ready: 'lyr:ready',     // view -> main: окно загрузилось, пришли всё состояние
   hb: 'lyr:hb',           // view -> main: «я открыто» + статистика видео
   seekreq: 'lyr:seekreq', // view -> main: клик по строке в окне текста
+  status: 'lyr:status',   // view -> main: сообщение для строки состояния (ошибки видео)
 };

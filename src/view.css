@@ -7,9 +7,9 @@ body.pop{background:#000;overflow:hidden}
 
 /* отображение (общее для превью и окна текста) */
 .view{position:relative;overflow:hidden;width:100%;height:100%;flex:1;background:radial-gradient(120% 90% at 50% 40%,#3a2a52,#1c1526);--fs:48px;--tint:.45;--pw:94;--ph:1}
-.view .bg{position:absolute;inset:0;background-size:cover;background-position:center}
+.view .bg{position:absolute;inset:0;background-size:cover;background-position:center;pointer-events:none}
 .view .bg video{width:100%;height:100%;object-fit:cover}
-.view.nobg .bg,.view.nobg .pc{display:none}
+.view.nobg .bg,.view.nobg .pc{display:none!important}
 .view .panel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:calc(var(--pw) * 1%);height:min(96%,calc(var(--fs) * 4.6 * var(--ph)));border-radius:calc(var(--fs) * .5);overflow:hidden;border:1px solid #ffffff1f}
 .view .pc{position:absolute;max-width:none}
 .view .pt{position:absolute;inset:0;background:rgba(12,8,22,var(--tint))}
