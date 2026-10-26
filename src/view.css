@@ -34,3 +34,11 @@ body.pop{background:#000;overflow:hidden}
 .view .tm.done .arc{stroke:#fff}
 .view .tt{font-size:calc(var(--fs) * .3);font-weight:800;font-variant-numeric:tabular-nums;color:#fff}
 @media (prefers-reduced-motion:reduce){.view .list,.view .l,.view .tm .arc{transition:none}}
+
+/* способ размытия «CSS»: размывается то, что находится под панелью (видео), на видеокарте */
+.view.bf .panel{-webkit-backdrop-filter:blur(var(--bl,0px));backdrop-filter:blur(var(--bl,0px))}
+/* облегчённые режимы */
+.view.lvl1 .l.cur,.view.lvl2 .l.cur{text-shadow:none}
+.view.lvl2 .panel{border-radius:0;border-color:transparent}
+/* диагностика: только видео */
+.view.vidonly .panel,.view.vidonly .tm,.view.vidonly .empty{display:none}

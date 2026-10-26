@@ -1,12 +1,17 @@
 /* Общий код отображения текста: одно и то же рисует и превью в главном окне, и окно текста.
    o = { kind, S(), onSeek(t), getTime(), status(msg) }
-   Фон показывается только в окне текста (kind === 'bgpop'): в превью его нет. */
+   Фон показывается только в окне текста (kind === 'bgpop'): в превью его нет.
+
+   Уровни облегчения (d.level): 0 — всё включено, 1 — без размытия, 2 — ещё и без тени текста и скруглений. */
 
 export function findLine(L, t) {
   let lo = 0, hi = L.length - 1, r = -1;
   while (lo <= hi) { const m = (lo + hi) >> 1; if (L[m].time <= t) { r = m; lo = m + 1; } else hi = m - 1; }
   return r;
 }
+
+const VIDEO_MEM_LIMIT = 5e8; // видео меньше 500 МБ читается в память целиком (как в браузерной версии)
+const HAS_RVFC = typeof HTMLVideoElement !== 'undefined' && 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
 
 export function Display(root, o) {
   const S = () => o.S();
@@ -18,10 +23,22 @@ export function Display(root, o) {
   const panel = root.querySelector('.panel'), pc = root.querySelector('.pc'), cx = pc.getContext('2d');
   const tmEl = root.querySelector('.tm'), arc = root.querySelector('.arc'), tt = root.querySelector('.tt');
   let cur = -2, last = 0, geo = '';
-  let srcEl = null, srcUrl = null, blobUrl = null, wantPlay = false, retry = 0, lastFail = 0, mvT = 0;
-  let dirty = true, lt = -1, lw = 0, lh = 0;
+  let srcEl = null, srcUrl = null, blobUrl = null, wantPlay = false, retry = 0, lastFail = 0, mvT = 0, bgTok = 0;
+  let dirty = true, newFrame = false, lt = -1, lw = 0, lh = 0;
+  let lvl = 0, vidonly = false;
 
-  /* единственное фоновое видео: обычный <video>, а размытие под текстом считается на маленьком холсте из его кадров */
+  /* какой способ размытия сейчас включён */
+  const blurOn = () => on() && S().blur > 0 && lvl === 0 && !vidonly;
+  const useCanvas = () => blurOn() && S().bmode === 'canvas'; // размытая копия кадров на маленьком холсте
+  const useCss = () => blurOn() && S().bmode !== 'canvas';    // backdrop-filter: на видеокарте, всегда синхронно с видео
+
+  function disposeVideos() { // отпускаем декодер, а не оставляем видео играть «в воздухе»
+    bg.querySelectorAll('video').forEach(v => { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {} });
+    bg.innerHTML = '';
+  }
+  const dropBlob = () => { if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; } };
+
+  /* единственное фоновое видео: обычный <video> */
   function makeVideo(url, t) {
     const v = document.createElement('video');
     v.muted = true; v.defaultMuted = true; v.setAttribute('muted', ''); v.loop = true; v.playsInline = true; v.preload = 'auto';
@@ -37,10 +54,34 @@ export function Display(root, o) {
     v.onseeked = () => { dirty = true; };
     v.onloadeddata = () => { dirty = true; };
     v.onerror = () => videoFailed(v);
+    if (HAS_RVFC) { const cb = () => { newFrame = true; if (v === srcEl) v.requestVideoFrameCallback(cb); }; v.requestVideoFrameCallback(cb); }
     v.src = url; bg.appendChild(v);
     return v;
   }
-  const dropBlob = () => { if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; } };
+
+  /* файл целиком в память: не зависит от скорости диска и чтения кусками через asset-протокол.
+     Возвращает blob-ссылку или null (файл слишком большой / не удалось), тогда играем напрямую с диска. */
+  async function toBlob(url) {
+    const ctrl = new AbortController();
+    const r = await fetch(url, { signal: ctrl.signal });
+    if (r.status !== 200) { ctrl.abort(); return null; }
+    const len = +r.headers.get('content-length') || 0;
+    if (len > VIDEO_MEM_LIMIT) { ctrl.abort(); return null; }
+    const buf = await r.arrayBuffer();
+    if (buf.byteLength > VIDEO_MEM_LIMIT) return null;
+    return URL.createObjectURL(new Blob([buf], { type: r.headers.get('content-type') || 'video/mp4' }));
+  }
+  async function loadVideo(url, tok) {
+    let play = url;
+    o.status('Загружаю видео в память…');
+    try {
+      const b = await toBlob(url);
+      if (tok !== bgTok) { if (b) URL.revokeObjectURL(b); return; } // пока грузили, фон сменили
+      if (b) { dropBlob(); blobUrl = b; play = b; o.status('Видео загружено в память. Фон виден в окне текста.'); }
+      else o.status('Видео большое, играет прямо с диска.');
+    } catch (e) { if (tok !== bgTok) return; o.status('Видео играет прямо с диска.'); }
+    srcEl = makeVideo(play, null); dirty = true; d.keep(wantPlay);
+  }
 
   /* ошибка видео: код 2 = не удалось дочитать файл, пробуем загрузить его целиком заново */
   async function videoFailed(v) {
@@ -54,9 +95,9 @@ export function Display(root, o) {
         const r = await fetch(srcUrl);
         url = URL.createObjectURL(new Blob([await r.arrayBuffer()], { type: r.headers.get('content-type') || 'video/mp4' }));
       } catch (e) { o.status('Не удалось прочитать видеофайл.'); return; }
-      if (v !== srcEl) { URL.revokeObjectURL(url); return; } // пока грузили, фон сменили
+      if (v !== srcEl) { URL.revokeObjectURL(url); return; }
       dropBlob(); blobUrl = url;
-      bg.innerHTML = ''; srcEl = makeVideo(url, t); dirty = true; d.keep(wantPlay);
+      disposeVideos(); srcEl = makeVideo(url, t); dirty = true; d.keep(wantPlay);
       return;
     }
     o.status(code === 2 ? 'Не удалось прочитать видеофайл с диска. Если он на сетевом или облачном диске, скопируй его на локальный диск и выбери заново.'
@@ -76,35 +117,44 @@ export function Display(root, o) {
       empty.textContent = a.length ? '' : 'Выбери песню: текст подтянется сам';
       cur = -2;
     },
+    /* n: уровень облегчения 0..2, only: режим диагностики «только видео, без панели с текстом» */
+    level(n, only) { lvl = n; vidonly = !!only; d.style(); },
     style() {
       const s = S();
       dirty = true;
-      pc.style.display = s.blur > 0 ? 'block' : 'none';
+      pc.style.display = useCanvas() ? 'block' : 'none';
       root.style.setProperty('--tint', s.tint / 100);
+      root.style.setProperty('--bl', Math.round(s.blur * .7) + 'px');
       root.style.setProperty('--pw', s.pw);
       root.style.setProperty('--ph', s.ph / 100);
+      root.classList.toggle('bf', useCss());
+      root.classList.toggle('lvl1', lvl >= 1);
+      root.classList.toggle('lvl2', lvl >= 2);
+      root.classList.toggle('vidonly', vidonly);
       root.classList.toggle('hastm', !!s.tsh);
       root.classList.toggle('nobg', !on());
       const tp = s.tpos || 'tc';
       root.classList.toggle('pos-b', tp[0] === 'b');
       root.classList.toggle('pos-l', tp[1] === 'l');
       root.classList.toggle('pos-r', tp[1] === 'r');
+      d.fit();
     },
     bg(url, vid) {
-      bg.innerHTML = ''; bg.style.backgroundImage = ''; srcEl = null; srcUrl = null; dropBlob(); retry = 0; dirty = true;
+      bgTok++; const tok = bgTok;
+      disposeVideos(); bg.style.backgroundImage = ''; srcEl = null; srcUrl = null; dropBlob(); retry = 0; dirty = true;
       if (!url || !on()) return;
       srcUrl = url;
-      if (vid) srcEl = makeVideo(url, null);
+      if (vid) loadVideo(url, tok);
       else {
         bg.style.backgroundImage = `url("${url}")`;
         const im = document.createElement('img'); im.onload = () => { dirty = true; }; im.src = url; srcEl = im;
       }
     },
-    touch() { dirty = true; },
     keep(want) {
       wantPlay = want;
       const v = srcEl && srcEl.tagName === 'VIDEO' ? srcEl : null;
       if (!v || !v.isConnected) return;
+      mvT = v.currentTime || mvT;
       const w = want && on(), now = Date.now();
       if (w && v.paused && !v.error) { v.play().catch(e => { if (e.name !== 'AbortError') o.status('Видео не запускается: ' + e.name); }); v._ls = now; }
       else if (!w && !v.paused) v.pause();
@@ -128,10 +178,12 @@ export function Display(root, o) {
       arc.style.strokeDashoffset = total ? 100 * (1 - r / total) : 100;
       tmEl.classList.toggle('done', total > 0 && r <= 0);
     },
-    fit() { /* размер шрифта подстраивается под размер окна */
+    /* размер шрифта и положение холста; вызывается при смене размера окна и настроек, а не по таймеру */
+    fit() {
       const s = S();
       const fs = Math.round(Math.min(root.clientWidth * .06, root.clientHeight * (s.tsh ? .15 : .17)) * s.scale / 100);
       if (fs > 0 && fs !== last) { last = fs; root.style.setProperty('--fs', fs + 'px'); cur = -2; }
+      if (!useCanvas()) return;
       const rr = root.getBoundingClientRect(), pr = panel.getBoundingClientRect();
       const x = Math.round(rr.left - pr.left - 1), y = Math.round(rr.top - pr.top - 1), w = root.clientWidth, h = root.clientHeight, g = x + '|' + y + '|' + w + '|' + h;
       if (g !== geo) { geo = g; pc.style.left = x + 'px'; pc.style.top = y + 'px'; pc.style.width = w + 'px'; pc.style.height = h + 'px'; }
@@ -144,24 +196,24 @@ export function Display(root, o) {
     },
   };
 
-  /* размытие под текстом перерисовывается только когда что-то изменилось: новый кадр видео, размер окна, настройки */
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => d.fit()).observe(root);
+
+  /* режим «по кадрам»: размытая копия на маленьком холсте, перерисовывается только когда появился новый кадр видео */
   (function frame() {
     requestAnimationFrame(frame);
-    const s = srcEl; if (!s || !on()) return;
+    const s = srcEl; if (!s || !useCanvas()) return;
     const W = root.clientWidth, H = root.clientHeight; if (!W || !H) return;
     const sw = s.videoWidth || s.naturalWidth, sh = s.videoHeight || s.naturalHeight;
     if (!sw || !sh || (s.readyState !== undefined && s.readyState < 2)) return;
-    const t = s.currentTime || 0;
-    if (!dirty && t === lt && W === lw && H === lh) return;
-    dirty = false; lt = t; lw = W; lh = H;
-    if (s.tagName === 'VIDEO') mvT = t;
+    const isVid = s.tagName === 'VIDEO', t = isVid ? (s.currentTime || 0) : 0;
+    const fresh = isVid && (HAS_RVFC ? newFrame : t !== lt);
+    if (!dirty && !fresh && W === lw && H === lh) return;
+    dirty = false; newFrame = false; lt = t; lw = W; lh = H;
     const blur = S().blur;
-    if (blur > 0) {
-      const k = Math.max(W / sw, H / sh), vw = W / k, vh = H / k;
-      const cw = Math.max(16, Math.round(W / (blur * .8 + 1))), ch = Math.max(9, Math.round(cw * H / W));
-      if (pc.width !== cw || pc.height !== ch) { pc.width = cw; pc.height = ch; cx.imageSmoothingQuality = 'medium'; if ('filter' in cx) cx.filter = 'blur(1px)'; }
-      cx.drawImage(s, (sw - vw) / 2, (sh - vh) / 2, vw, vh, 0, 0, cw, ch);
-    }
+    const k = Math.max(W / sw, H / sh), vw = W / k, vh = H / k;
+    const cw = Math.max(16, Math.round(W / (blur * .8 + 1))), ch = Math.max(9, Math.round(cw * H / W));
+    if (pc.width !== cw || pc.height !== ch) { pc.width = cw; pc.height = ch; cx.imageSmoothingQuality = 'medium'; if ('filter' in cx) cx.filter = 'blur(1px)'; }
+    cx.drawImage(s, (sw - vw) / 2, (sh - vh) / 2, vw, vh, 0, 0, cw, ch);
   })();
   d.style();
   return d;

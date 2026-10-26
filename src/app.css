@@ -10,8 +10,8 @@ input[type=file]{display:none}
 #q,#tt{background:#00000040;border:1px solid #ffffff26;border-radius:999px;color:var(--fg);padding:7px 14px;font:inherit;font-size:14px}
 #q{flex:1;min-width:160px}
 #tt{width:84px;text-align:center}
-#tpos{background:#00000040;border:1px solid #ffffff26;border-radius:999px;color:var(--fg);padding:7px 14px;font:inherit;font-size:14px}
-#tpos option{background:#2c2040;color:#fff}
+#tpos,#perf,#bmode{background:#00000040;border:1px solid #ffffff26;border-radius:999px;color:var(--fg);padding:7px 14px;font:inherit;font-size:14px}
+#tpos option,#perf option,#bmode option{background:#2c2040;color:#fff}
 .set label{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--dim)}
 .set output{min-width:42px;color:var(--fg)}
 input[type=range]{width:120px;accent-color:var(--acc)}

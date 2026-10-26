@@ -12,7 +12,7 @@ import { EV } from './bus.js';
 const $ = s => document.querySelector(s), au = $('#au');
 const st = t => $('#st').textContent = t;
 let L = [], off = 0, M = null, meta = null, bgPath = null, bgVid = false, playing = false;
-let S = { scale: 100, blur: 18, tint: 45, pw: 94, ph: 100, tsh: false, tt: '05:00', tpos: 'tc', bgshow: true };
+let S = { scale: 100, blur: 18, tint: 45, pw: 94, ph: 100, tsh: false, tt: '05:00', tpos: 'tc', bgshow: true, bmode: 'css', perf: 'auto', autoLevel: 0 };
 try { Object.assign(S, JSON.parse(localStorage.getItem('lyr') || '{}')); } catch (e) {}
 const saveS = () => { try { localStorage.setItem('lyr', JSON.stringify(S)); } catch (x) {} };
 const VIDEO_RE = /\.(mp4|m4v|webm|mov|mkv|ogv|avi)$/i;
@@ -42,7 +42,7 @@ const pv = Display($('#pv'), {
 });
 
 let lastHb = -1e9, popStat = null;
-const popOpen = () => performance.now() - lastHb < 2000;
+const popOpen = () => performance.now() - lastHb < 3500;
 
 const pushLines = () => emit(EV.lines, { lines: L });
 const pushBg = () => emit(EV.bg, bgPath ? { path: bgPath, vid: bgVid } : null);
@@ -54,6 +54,7 @@ listen(EV.ready, () => { lastHb = performance.now(); pushAll(); });
 listen(EV.hb, e => { lastHb = performance.now(); popStat = e.payload && e.payload.s; });
 listen(EV.seekreq, e => { au.currentTime = e.payload.t; });
 listen(EV.status, e => st(e.payload.msg));
+listen(EV.perf, e => { S.autoLevel = e.payload.level; saveS(); });
 
 async function openPop() {
   try {
@@ -102,14 +103,14 @@ function setLyrics(a) { L = a; pv.lines(a); pushLines(); $('#dlrc').disabled = !
 let n = 0;
 setInterval(() => {
   const i = findLine(L, au.currentTime + off), r = tm.value();
-  pv.fit(); pv.show(i); pv.timer(r, tm.total);
+  pv.show(i); pv.timer(r, tm.total);
   n++;
   if (n % 12 === 0) {
     const s = popOpen() ? popStat : null;
-    $('#vs').textContent = s ? `Видео: ${s.w}×${s.h}, ${s.e ? 'ошибка ' + s.e : s.p ? 'пауза' : s.rs < 3 ? 'буферизация' : 'играет'}, ${s.t.toFixed(1)} с, пропущено кадров ${s.d} из ${s.n}` : '';
+    $('#vs').textContent = s ? `Видео: ${s.w}×${s.h}, ${s.e ? 'ошибка ' + s.e : s.p ? 'пауза' : s.rs < 3 ? 'буферизация' : 'играет'}, ${s.t.toFixed(1)} с, пропущено кадров ${s.d} из ${s.n}. ${perfText()}` : '';
   }
 }, 80);
-setInterval(() => { if (popOpen()) pushTick(); }, 100);
+setInterval(() => { if (popOpen()) pushTick(); }, 250);
 
 /* ---------- поиск (с локальным кэшем на случай, когда интернета нет) ---------- */
 const ck = q => 'lyr:c:' + q.toLowerCase().replace(/\s+/g, ' ').trim();
@@ -168,6 +169,19 @@ $('#dlrc').onclick = async () => {
 };
 $('#m').onclick = () => { off -= .5; st('Сдвиг текста: ' + off.toFixed(1) + ' с'); pushSet(); };
 $('#p').onclick = () => { off += .5; st('Сдвиг текста: ' + off.toFixed(1) + ' с'); pushSet(); };
+
+/* ---------- режим производительности ---------- */
+const PERF_NAMES = ['полный вид', 'без размытия', 'без размытия, тени и скруглений'];
+const perfText = () => S.perf === 'auto' ? `Режим: авто, сейчас «${PERF_NAMES[S.autoLevel || 0]}».`
+  : S.perf === 'lite' ? 'Режим: лёгкий.' : S.perf === 'vid' ? 'Режим: только видео (диагностика).' : 'Режим: максимум.';
+$('#perf').value = S.perf;
+$('#perf').onchange = e => {
+  S.perf = e.target.value;
+  if (S.perf === 'auto') S.autoLevel = 0; // заново присмотреться к этому видео и компьютеру
+  saveS(); pushSet(); st(perfText());
+};
+$('#bmode').value = S.bmode;
+$('#bmode').onchange = e => { S.bmode = e.target.value; saveS(); pushSet(); };
 
 /* ---------- настройки, фон, таймер ---------- */
 [['sc', 'scale', '%'], ['pw', 'pw', '%'], ['ph', 'ph', '%'], ['bl', 'blur', ' px'], ['tn', 'tint', '%']].forEach(([id, k, u]) => {
