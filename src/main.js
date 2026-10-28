@@ -4,6 +4,7 @@ import './app.css';
 import { emit, listen } from '@tauri-apps/api/event';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { Display, findLine } from './display.js';
@@ -12,23 +13,23 @@ import { EV } from './bus.js';
 const $ = s => document.querySelector(s), au = $('#au');
 const st = t => $('#st').textContent = t;
 let L = [], off = 0, M = null, meta = null, bgPath = null, bgVid = false, playing = false;
-let S = { scale: 100, blur: 18, tint: 45, pw: 94, ph: 100, tsh: false, tt: '05:00', tpos: 'tc', bgshow: true, bmode: 'css', perf: 'auto', autoLevel: 0 };
+let S = { scale: 100, blur: 18, tint: 45, pw: 94, ph: 100, tsh: false, tt: '05:00', tpos: 'tc', tscale: 150, tclose: true, bgshow: true, bmode: 'css', perf: 'auto', autoLevel: 0 };
 try { Object.assign(S, JSON.parse(localStorage.getItem('lyr') || '{}')); } catch (e) {}
 const saveS = () => { try { localStorage.setItem('lyr', JSON.stringify(S)); } catch (x) {} };
 const VIDEO_RE = /\.(mp4|m4v|webm|mov|mkv|ogv|avi)$/i;
 
 /* ---------- таймер обратного отсчёта ---------- */
 const tm = {
-  total: 0, rem: 0, t0: 0, on: false,
+  total: 0, rem: 0, t0: 0, on: false, done: false, // done: таймер сам дошёл до нуля (один раз)
   set(ms) { this.total = ms; if (!this.on) this.rem = ms; },
   value() {
     let v = this.on ? this.rem - (performance.now() - this.t0) : this.rem;
-    if (v <= 0) { v = 0; this.on = false; this.rem = 0; }
+    if (v <= 0) { if (this.on) this.done = true; v = 0; this.on = false; this.rem = 0; }
     return v;
   },
   run() { if (this.on || this.rem <= 0) return; this.t0 = performance.now(); this.on = true; },
   pause() { if (!this.on) return; this.rem = Math.max(0, this.rem - (performance.now() - this.t0)); this.on = false; },
-  reset() { this.on = false; this.rem = this.total; },
+  reset() { this.on = false; this.done = false; this.rem = this.total; },
 };
 const pt = s => { const p = s.trim().split(':').map(Number); return (!p.length || p.some(x => isNaN(x))) ? null : p.reduce((a, b) => a * 60 + b, 0) * 1000; };
 
@@ -69,7 +70,24 @@ async function openPop() {
 $('#win').onclick = openPop;
 
 /* ---------- общий запуск: музыка + видео + таймер ---------- */
+/* ---------- конец таймера: закрыть программу (с задержкой 3 с, её можно отменить) ---------- */
+let closeT = null;
+function onTimerEnd() {
+  if (!S.tsh || !S.tclose) return;
+  if (M) { st('Таймер закончился, но идёт ручная разметка: программа не закрыта.'); return; }
+  if (closeT) return;
+  let left = 3;
+  const tick = () => {
+    if (left <= 0) { getCurrentWindow().close().catch(e => st('Не удалось закрыть программу: ' + e)); return; }
+    st(`Таймер закончился. Программа закроется через ${left} с. Отмена: кнопка «Сначала» или снять галочку закрытия.`);
+    left--; closeT = setTimeout(tick, 1000);
+  };
+  tick();
+}
+function cancelClose() { if (closeT) { clearTimeout(closeT); closeT = null; st('Закрытие отменено.'); } }
+
 function go() {
+  cancelClose();
   playing = true; $('#pp').textContent = 'Пауза';
   tm.run();
   if (au.src && au.paused) au.play().catch(() => {});
@@ -82,7 +100,7 @@ function halt() {
   pushTick();
 }
 $('#pp').onclick = () => playing ? halt() : go();
-$('#rs').onclick = () => { halt(); au.currentTime = 0; tm.reset(); emit(EV.seek, { t: 0 }); pushTick(); };
+$('#rs').onclick = () => { cancelClose(); halt(); au.currentTime = 0; tm.reset(); emit(EV.seek, { t: 0 }); pushTick(); };
 au.onplay = () => { if (!playing) go(); };
 au.onpause = () => { if (playing && !au.ended) halt(); };
 au.onseeked = () => { emit(EV.seek, { t: au.currentTime }); pushTick(); };
@@ -104,6 +122,7 @@ let n = 0;
 setInterval(() => {
   const i = findLine(L, au.currentTime + off), r = tm.value();
   pv.show(i); pv.timer(r, tm.total);
+  if (tm.done) { tm.done = false; onTimerEnd(); }
   n++;
   if (n % 12 === 0) {
     const s = popOpen() ? popStat : null;
@@ -171,7 +190,7 @@ $('#m').onclick = () => { off -= .5; st('Сдвиг текста: ' + off.toFixe
 $('#p').onclick = () => { off += .5; st('Сдвиг текста: ' + off.toFixed(1) + ' с'); pushSet(); };
 
 /* ---------- режим производительности ---------- */
-const PERF_NAMES = ['полный вид', 'без размытия', 'без размытия, тени и скруглений'];
+const PERF_NAMES = ['полный вид', 'без размытия', 'без размытия и тени текста'];
 const perfText = () => S.perf === 'auto' ? `Режим: авто, сейчас «${PERF_NAMES[S.autoLevel || 0]}».`
   : S.perf === 'lite' ? 'Режим: лёгкий.' : S.perf === 'vid' ? 'Режим: только видео (диагностика).' : 'Режим: максимум.';
 $('#perf').value = S.perf;
@@ -184,7 +203,7 @@ $('#bmode').value = S.bmode;
 $('#bmode').onchange = e => { S.bmode = e.target.value; saveS(); pushSet(); };
 
 /* ---------- настройки, фон, таймер ---------- */
-[['sc', 'scale', '%'], ['pw', 'pw', '%'], ['ph', 'ph', '%'], ['bl', 'blur', ' px'], ['tn', 'tint', '%']].forEach(([id, k, u]) => {
+[['sc', 'scale', '%'], ['pw', 'pw', '%'], ['ph', 'ph', '%'], ['bl', 'blur', ' px'], ['tn', 'tint', '%'], ['ts', 'tscale', '%']].forEach(([id, k, u]) => {
   const e = $('#' + id), o = $('#' + id + 'o');
   e.value = S[k]; o.textContent = S[k] + u;
   e.oninput = () => { S[k] = +e.value; o.textContent = S[k] + u; saveS(); pv.style(); pushSet(); };
@@ -199,7 +218,9 @@ $('#fb').onclick = async () => {
 };
 $('#fx').onclick = () => { bgPath = null; pushBg(); };
 $('#tsh').checked = !!S.tsh;
-$('#tsh').onchange = e => { S.tsh = e.target.checked; saveS(); pv.style(); pushSet(); };
+$('#tsh').onchange = e => { S.tsh = e.target.checked; if (!S.tsh) cancelClose(); saveS(); pv.style(); pushSet(); };
+$('#tcl').checked = !!S.tclose;
+$('#tcl').onchange = e => { S.tclose = e.target.checked; if (!S.tclose) cancelClose(); saveS(); };
 $('#tt').value = S.tt;
 $('#tpos').value = S.tpos || 'tc';
 $('#tpos').onchange = e => { S.tpos = e.target.value; saveS(); pv.style(); pushSet(); };

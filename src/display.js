@@ -2,7 +2,7 @@
    o = { kind, S(), onSeek(t), getTime(), status(msg) }
    Фон показывается только в окне текста (kind === 'bgpop'): в превью его нет.
 
-   Уровни облегчения (d.level): 0 — всё включено, 1 — без размытия, 2 — ещё и без тени текста и скруглений. */
+   Уровни облегчения (d.level): 0 — всё включено, 1 — без размытия, 2 — ещё и без тени текста. */
 
 export function findLine(L, t) {
   let lo = 0, hi = L.length - 1, r = -1;
@@ -18,19 +18,36 @@ export function Display(root, o) {
   const on = () => o.kind === 'bgpop';
   root.className = 'view';
   root.innerHTML = '<div class="bg"></div><div class="panel"><canvas class="pc"></canvas><div class="pt"></div><div class="list"></div></div><div class="empty"></div>'
-    + '<div class="tm"><svg viewBox="0 0 100 100"><circle class="trk" cx="50" cy="50" r="45"/><circle class="arc" cx="50" cy="50" r="45" pathLength="100"/></svg><span class="tt">00:00</span></div>';
+    + '<div class="tm"><svg viewBox="0 0 100 100"><circle class="trk" cx="50" cy="50" r="45"/><circle class="arc" cx="50" cy="50" r="45" pathLength="100"/></svg><span class="tt"></span></div>';
   const bg = root.querySelector('.bg'), list = root.querySelector('.list'), empty = root.querySelector('.empty');
   const panel = root.querySelector('.panel'), pc = root.querySelector('.pc'), cx = pc.getContext('2d');
   const tmEl = root.querySelector('.tm'), arc = root.querySelector('.arc'), tt = root.querySelector('.tt');
   let cur = -2, last = 0, geo = '';
   let srcEl = null, srcUrl = null, blobUrl = null, wantPlay = false, retry = 0, lastFail = 0, mvT = 0, bgTok = 0;
   let dirty = true, newFrame = false, lt = -1, lw = 0, lh = 0;
-  let lvl = 0, vidonly = false;
+  let lvl = 0, vidonly = false, lastTu = 0, digits = [];
+  const reduceMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /* какой способ размытия сейчас включён */
   const blurOn = () => on() && S().blur > 0 && lvl === 0 && !vidonly;
   const useCanvas = () => blurOn() && S().bmode === 'canvas'; // размытая копия кадров на маленьком холсте
   const useCss = () => blurOn() && S().bmode !== 'canvas';    // backdrop-filter: на видеокарте, всегда синхронно с видео
+
+  /* цифры таймера: меняются по одной, сменившаяся цифра «выезжает» снизу */
+  function setTimerText(txt) {
+    if (txt.length !== digits.length) {
+      tt.innerHTML = '';
+      digits = [...txt].map(ch => { const e = document.createElement('span'); e.className = ch === ':' ? 'cl' : 'dg'; e.textContent = ch; tt.appendChild(e); return e; });
+      return;
+    }
+    for (let i = 0; i < txt.length; i++) {
+      if (digits[i].textContent === txt[i]) continue;
+      digits[i].textContent = txt[i];
+      if (!reduceMotion && digits[i].animate) {
+        digits[i].animate([{ transform: 'translateY(.5em)', opacity: 0 }, { transform: 'translateY(0)', opacity: 1 }], { duration: 280, easing: 'cubic-bezier(.2,.8,.2,1)' });
+      }
+    }
+  }
 
   function disposeVideos() { // отпускаем декодер, а не оставляем видео играть «в воздухе»
     bg.querySelectorAll('video').forEach(v => { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {} });
@@ -174,15 +191,17 @@ export function Display(root, o) {
     },
     timer(r, total) {
       const s = Math.ceil(r / 1000), txt = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
-      if (tt.textContent !== txt) tt.textContent = txt;
+      setTimerText(txt);
       arc.style.strokeDashoffset = total ? 100 * (1 - r / total) : 100;
       tmEl.classList.toggle('done', total > 0 && r <= 0);
     },
     /* размер шрифта и положение холста; вызывается при смене размера окна и настроек, а не по таймеру */
     fit() {
       const s = S();
-      const fs = Math.round(Math.min(root.clientWidth * .06, root.clientHeight * (s.tsh ? .15 : .17)) * s.scale / 100);
+      const base = Math.min(root.clientWidth * .06, root.clientHeight * (s.tsh ? .15 : .17));
+      const fs = Math.round(base * s.scale / 100), tu = Math.round(base * (s.tscale || 150) / 100); // таймер масштабируется вместе с окном, но отдельно от шрифта
       if (fs > 0 && fs !== last) { last = fs; root.style.setProperty('--fs', fs + 'px'); cur = -2; }
+      if (tu > 0 && tu !== lastTu) { lastTu = tu; root.style.setProperty('--tu', tu + 'px'); }
       if (!useCanvas()) return;
       const rr = root.getBoundingClientRect(), pr = panel.getBoundingClientRect();
       const x = Math.round(rr.left - pr.left - 1), y = Math.round(rr.top - pr.top - 1), w = root.clientWidth, h = root.clientHeight, g = x + '|' + y + '|' + w + '|' + h;

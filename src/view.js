@@ -6,7 +6,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Display, findLine } from './display.js';
 import { EV } from './bus.js';
 
-let S = { scale: 100, blur: 18, tint: 45, pw: 94, ph: 100, tsh: false, tt: '05:00', tpos: 'tc', bgshow: true, bmode: 'css', perf: 'auto', autoLevel: 0 };
+let S = { scale: 100, blur: 18, tint: 45, pw: 94, ph: 100, tsh: false, tt: '05:00', tpos: 'tc', tscale: 150, bgshow: true, bmode: 'css', perf: 'auto', autoLevel: 0 };
 let L = [], off = 0, wasPlaying = false;
 let base = { t: 0, playing: false, at: performance.now() };      // время аудио, пришедшее из главного окна
 let tmr = { v: 0, total: 0, on: false, at: performance.now() };  // таймер обратного отсчёта
@@ -57,7 +57,7 @@ setInterval(() => emit(EV.hb, { s: d.stat() }), 1000);
 
 /* ---------- авто-режим: если видео стало пропускать кадры, упрощаем оформление ----------
    Каждые 2 с смотрим долю пропущенных кадров. Три плохих интервала подряд — уровень +1
-   (1: без размытия, 2: ещё без тени текста и скруглений). Выбор запоминается на этом компьютере. */
+   (1: без размытия, 2: ещё без тени текста). Выбор запоминается на этом компьютере. */
 let prev = null, bad = 0, advised = false;
 function resetWatch() { prev = null; bad = 0; }
 setInterval(() => {
@@ -74,7 +74,7 @@ setInterval(() => {
         emit(EV.perf, { level: autoLevel });
         emit(EV.status, { msg: autoLevel === 1
           ? 'Окно текста: видео пропускает кадры, размытие отключено автоматически (режим «Авто»). Вернуть: выбери режим «Максимум» или снова «Авто».'
-          : 'Окно текста: пропуски кадров остались, упростил оформление ещё сильнее (без тени текста и скруглений).' });
+          : 'Окно текста: пропуски кадров остались, упростил оформление ещё сильнее (без тени текста).' });
       } else if (!advised) {
         advised = true;
         emit(EV.status, { msg: 'Окно текста: видео всё равно пропускает кадры. Пересохрани его в MP4 (H.264, 8 бит, 1080p, 30 fps) или выбери видео полегче.' });
