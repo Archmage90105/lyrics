@@ -1,0 +1,47 @@
+# Автосборка установщика Windows и черновик релиза на GitHub.
+# Как запустить:
+#   1) вручную: вкладка Actions -> Release -> Run workflow (версия берётся из src-tauri/tauri.conf.json);
+#   2) по тегу: git tag v0.2.0 && git push origin v0.2.0
+# Готовый установщик появится в Releases как черновик: проверьте и нажмите Publish.
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # по тегу берём имя тега, при ручном запуске: v + версия из tauri.conf.json
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
+          releaseName: 'Lyrics v__VERSION__'
+          releaseBody: 'Установщик для Windows (Lyrics_*_x64-setup.exe) во вложениях ниже.'
+          releaseDraft: true
+          prerelease: false
+          # только установщик NSIS (.exe); уберите строку, чтобы собирался ещё и MSI
+          args: --bundles nsis
