@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Текст песни: управление</title>
+<style>
+:root{--bg:#1c1526;--fg:#fff;--dim:#a99bbd;--acc:#ffe066}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{display:flex;flex-direction:column;background:radial-gradient(120% 90% at 50% 40%,#2c2040,var(--bg));color:var(--fg);font:600 16px/1.3 system-ui,"Segoe UI",sans-serif}
+
+/* панель управления */
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px 0}
+.b,label.b{background:#ffffff14;color:var(--fg);border:1px solid #ffffff26;border-radius:999px;padding:7px 14px;font:inherit;font-size:14px;cursor:pointer}
+.b:hover:not(:disabled){background:#ffffff26}
+.b:disabled{opacity:.4;cursor:default}
+.b.main{background:var(--acc);color:#1c1526;border-color:var(--acc);min-width:92px}
+.b:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+input[type=file]{display:none}
+#q,#tt{background:#00000040;border:1px solid #ffffff26;border-radius:999px;color:var(--fg);padding:7px 14px;font:inherit;font-size:14px}
+#q{flex:1;min-width:160px}
+#tt{width:84px;text-align:center}
+#tpos{background:#00000040;border:1px solid #ffffff26;border-radius:999px;color:var(--fg);padding:7px 14px;font:inherit;font-size:14px}
+#tpos option{background:#2c2040;color:#fff}
+.set label{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--dim)}
+.set output{min-width:42px;color:var(--fg)}
+input[type=range]{width:120px;accent-color:var(--acc)}
+input[type=checkbox]{accent-color:var(--acc);width:16px;height:16px}
+#st{padding:8px 16px 0;color:var(--dim);font-size:13px;min-height:26px}
+#pan{margin:8px 16px 0;padding:12px;border:1px solid #ffffff26;border-radius:12px;display:grid;gap:8px}
+#pan[hidden]{display:none}
+#txt{width:100%;height:110px;background:#00000040;color:var(--fg);border:1px solid #ffffff26;border-radius:8px;padding:8px;font:inherit;font-size:14px}
+#pv{flex:1;min-height:220px;margin:8px 16px 0;border-radius:16px;overflow:hidden;border:1px solid #ffffff26}
+#foot{padding:10px 16px 16px}
+audio{width:100%;height:40px}
+
+/* отображение (общее для превью и отдельного окна) */
+.view{position:relative;overflow:hidden;width:100%;height:100%;flex:1;background:radial-gradient(120% 90% at 50% 40%,#3a2a52,#1c1526);--fs:48px;--tint:.45;--pw:94;--ph:1}
+.view .bg{position:absolute;inset:0;background-size:cover;background-position:center}
+.view .bg video{width:100%;height:100%;object-fit:cover}
+.view .panel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:calc(var(--pw) * 1%);height:min(96%,calc(var(--fs) * 4.6 * var(--ph)));border-radius:calc(var(--fs) * .5);overflow:hidden;border:1px solid #ffffff1f}
+.view .pc{position:absolute;max-width:none}
+.view .pt{position:absolute;inset:0;background:rgba(12,8,22,var(--tint))}
+.view.hastm .panel{top:calc(50% + var(--fs) * .6)}
+.view.pos-b .tm{top:auto;bottom:calc(var(--fs) * .2)}
+.view.pos-l .tm{left:calc(var(--fs) * .3);transform:none}
+.view.pos-r .tm{left:auto;right:calc(var(--fs) * .3);transform:none}
+.view.hastm.pos-b .panel{top:calc(50% - var(--fs) * .6)}
+.view .list{position:absolute;left:0;right:0;top:50%;transition:transform .6s cubic-bezier(.3,.7,.2,1)}
+.view .l{padding:.15em 5%;text-align:center;font-size:var(--fs);font-weight:800;line-height:1.15;color:var(--dim);opacity:0;transform:scale(.55);transition:transform .6s cubic-bezier(.3,.7,.2,1),opacity .5s,color .5s;cursor:pointer;overflow-wrap:anywhere}
+.view .l.near{opacity:.5}
+.view .l.cur{opacity:1;transform:scale(1);color:#fff;text-shadow:0 2px 24px #0006}
+.view .empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:#fff;font-size:calc(var(--fs) * .4);pointer-events:none}
+
+/* таймер обратного отсчёта */
+.view .tm{display:none;position:absolute;top:calc(var(--fs) * .2);left:50%;transform:translateX(-50%);height:calc(var(--fs) * 1.1);aspect-ratio:1;place-items:center;border-radius:50%;background:rgba(12,8,22,.6)}
+.view.hastm .tm{display:grid}
+.view .tm svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.view .tm circle{fill:none;stroke-width:6}
+.view .tm .trk{stroke:#ffffff2e}
+.view .tm .arc{stroke:var(--acc);stroke-linecap:round;stroke-dasharray:100;transition:stroke-dashoffset .12s linear,stroke .4s}
+.view .tm.done .arc{stroke:#fff}
+.view .tt{font-size:calc(var(--fs) * .3);font-weight:800;font-variant-numeric:tabular-nums;color:#fff}
+@media (prefers-reduced-motion:reduce){.view .list,.view .l,.view .tm .arc{transition:none}}
+</style>
+</head>
+<body>
+<div class="row">
+  <button class="b main" id="pp">Старт</button>
+  <button class="b" id="rs">Сначала</button>
+  <label class="b">Песня<input id="fa" type="file" accept="audio/*"></label>
+  <input id="q" placeholder="Исполнитель и название" aria-label="Поиск текста">
+  <button class="b" id="sr">Найти текст</button>
+  <label class="b">Открыть .lrc<input id="fl" type="file" accept=".lrc,.txt"></label>
+  <button class="b" id="dlrc" disabled>Скачать .lrc</button>
+  <button class="b" id="mk">Разметить вручную</button>
+  <button class="b" id="win">Открыть окно текста</button>
+</div>
+<div class="row set">
+  <label>Шрифт <input id="sc" type="range" min="50" max="220" step="5"><output id="sco"></output></label>
+  <label>Ширина окна <input id="pw" type="range" min="30" max="100"><output id="pwo"></output></label>
+  <label>Высота окна <input id="ph" type="range" min="50" max="250" step="5"><output id="pho"></output></label>
+  <label>Размытие <input id="bl" type="range" min="0" max="40"><output id="blo"></output></label>
+  <label>Затемнение <input id="tn" type="range" min="0" max="90"><output id="tno"></output></label>
+</div>
+<div class="row set">
+  <label class="b">Фон: картинка или видео<input id="fb" type="file" accept="image/*,video/*"></label>
+  <button class="b" id="fx">Убрать фон</button>
+  <label><input id="tsh" type="checkbox"> Показывать таймер</label>
+  <label>Таймер (мм:сс) <input id="tt" value="05:00" aria-label="Время таймера"></label>
+  <label>Положение <select id="tpos"><option value="tl">Сверху слева</option><option value="tc">Сверху по центру</option><option value="tr">Сверху справа</option><option value="bl">Снизу слева</option><option value="bc">Снизу по центру</option><option value="br">Снизу справа</option></select></label>
+  <button class="b" id="m">Текст −0,5 с</button><button class="b" id="p">Текст +0,5 с</button>
+</div>
+<div id="st"></div>
+<div id="vs" style="padding:0 16px;color:var(--dim);font-size:13px"></div>
+<div id="pan" hidden>
+  <textarea id="txt" placeholder="Вставь обычный текст песни: одна строка на строку"></textarea>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <button class="b" id="go">Начать с начала песни</button>
+    <button class="b" id="tap">Отметить строку (пробел)</button>
+    <span id="hint" style="color:var(--dim);font-size:14px"></span>
+  </div>
+</div>
+<div id="pv"></div>
+<div id="foot"><audio id="au" controls></audio></div>
+
+<script>
+const $=s=>document.querySelector(s), au=$('#au');
+const st=t=>$('#st').textContent=t;
+const css=document.querySelector('style').textContent;
+let L=[], off=0, M=null, meta=null, bgUrl=null, bgVid=false, pop=null, popD=null, playing=false;
+let S={scale:100,blur:18,tint:45,pw:94,ph:100,tsh:false,tt:'05:00',tpos:'tc'};
+try{Object.assign(S,JSON.parse(localStorage.getItem('lyr')||'{}'))}catch(e){}
+const save=()=>{try{localStorage.setItem('lyr',JSON.stringify(S))}catch(x){}};
+
+/* ---------- таймер обратного отсчёта ---------- */
+const tm={
+  total:0,rem:0,t0:0,on:false,
+  set(ms){this.total=ms;if(!this.on)this.rem=ms},
+  value(){
+    let v=this.on?this.rem-(performance.now()-this.t0):this.rem;
+    if(v<=0){v=0;this.on=false;this.rem=0}
+    return v;
+  },
+  run(){if(this.on||this.rem<=0)return;this.t0=performance.now();this.on=true},
+  pause(){if(!this.on)return;this.rem=Math.max(0,this.rem-(performance.now()-this.t0));this.on=false},
+  reset(){this.on=false;this.rem=this.total}
+};
+const pt=s=>{const p=s.trim().split(':').map(Number);return(!p.length||p.some(x=>isNaN(x)))?null:p.reduce((a,b)=>a*60+b,0)*1000};
+
+/* ---------- отображение: один код для превью и отдельного окна ---------- */
+function Display(doc,root){
+  root.className='view';
+  root.innerHTML='<div class="bg"></div><div class="panel"><canvas class="pc"></canvas><div class="pt"></div><div class="list"></div></div><div class="empty"></div>'
+    +'<div class="tm"><svg viewBox="0 0 100 100"><circle class="trk" cx="50" cy="50" r="45"/><circle class="arc" cx="50" cy="50" r="45" pathLength="100"/></svg><span class="tt">00:00</span></div>';
+  const bg=root.querySelector('.bg'), list=root.querySelector('.list'), empty=root.querySelector('.empty');
+  const panel=root.querySelector('.panel'), pc=root.querySelector('.pc'), cx=pc.getContext('2d');
+  const tmEl=root.querySelector('.tm'), arc=root.querySelector('.arc'), tt=root.querySelector('.tt');
+  const vids=()=>bg.querySelectorAll('video');
+  let cur=-2, last=0, srcEl=null, geo='';
+  const d={
+    lines(a){
+      list.innerHTML='';
+      a.forEach(l=>{const e=doc.createElement('div');e.className='l';e.textContent=l.text||'♪';e.onclick=()=>{au.currentTime=l.time};list.appendChild(e)});
+      empty.textContent=a.length?'':'Выбери песню: текст подтянется сам';
+      cur=-2;
+    },
+    style(){
+      pc.style.display=S.blur>0?'block':'none';root.style.setProperty('--tint',S.tint/100);
+      root.style.setProperty('--pw',S.pw);root.style.setProperty('--ph',S.ph/100);
+      root.classList.toggle('hastm',!!S.tsh);
+      const tp=S.tpos||'tc';
+      root.classList.toggle('pos-b',tp[0]==='b');root.classList.toggle('pos-l',tp[1]==='l');root.classList.toggle('pos-r',tp[1]==='r');
+    },
+    bg(url,vid){
+      bg.innerHTML=''; bg.style.backgroundImage=''; srcEl=null;
+      if(!url) return;
+      if(vid){
+        const v=doc.createElement('video');
+        v.muted=true;v.defaultMuted=true;v.setAttribute('muted','');v.loop=true;v.playsInline=true;v.preload='auto';
+        v.onloadedmetadata=()=>{if(isFinite(v.duration)&&v.duration>0)v.currentTime=au.currentTime%v.duration};
+        v.oncanplay=syncVideos;
+        v.onerror=()=>st('Видео не открылось: браузер не поддерживает этот формат или кодек. Лучше всего подходят MP4 (H.264) и WebM.');
+        v.src=url;bg.appendChild(v);srcEl=v;
+      }else{bg.style.backgroundImage=`url("${url}")`;const im=doc.createElement('img');im.src=url;srcEl=im}
+    },
+    keep(on){vids().forEach(v=>{if(on&&v.paused&&!v.error)v.play().catch(e=>{if(e.name!=='AbortError')st('Видео не запускается: '+e.name)});else if(!on&&!v.paused)v.pause()})},
+    stat(){
+      const v=vids()[0]; if(!v) return null;
+      const q=v.getVideoPlaybackQuality?v.getVideoPlaybackQuality():{};
+      return {w:v.videoWidth,h:v.videoHeight,p:v.paused,rs:v.readyState,t:v.currentTime,d:q.droppedVideoFrames||0,n:q.totalVideoFrames||0,e:v.error&&v.error.code};
+    },
+    seek(t){vids().forEach(v=>{if(isFinite(v.duration)&&v.duration>0)v.currentTime=t%v.duration})},
+    timer(r,total){
+      const s=Math.ceil(r/1000), txt=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+      if(tt.textContent!==txt) tt.textContent=txt;
+      arc.style.strokeDashoffset=total?100*(1-r/total):100;
+      tmEl.classList.toggle('done',total>0&&r<=0);
+    },
+    fit(){ /* размер шрифта подстраивается под размер окна */
+      const fs=Math.round(Math.min(root.clientWidth*.06,root.clientHeight*(S.tsh?.15:.17))*S.scale/100);
+      if(fs>0&&fs!==last){last=fs;root.style.setProperty('--fs',fs+'px');cur=-2}
+      const rr=root.getBoundingClientRect(),pr=panel.getBoundingClientRect();
+      const x=Math.round(rr.left-pr.left-1),y=Math.round(rr.top-pr.top-1),w=root.clientWidth,h=root.clientHeight,g=x+'|'+y+'|'+w+'|'+h;
+      if(g!==geo){geo=g;pc.style.left=x+'px';pc.style.top=y+'px';pc.style.width=w+'px';pc.style.height=h+'px'}
+    },
+    show(i){
+      if(i===cur) return; cur=i;
+      [...list.children].forEach((e,k)=>{const x=Math.abs(k-i);e.className='l'+(x==0?' cur':x==1?' near':'')});
+      const c=list.children[Math.max(i,0)];
+      if(c) list.style.transform=`translateY(${-(c.offsetTop+c.offsetHeight/2)}px)`;
+    }
+  };
+  /* размытие без тяжёлого backdrop-filter: фон рисуется в маленьком размере и растягивается */
+  function draw(){
+    if(!S.blur||!srcEl) return;
+    const W=root.clientWidth,H=root.clientHeight;
+    const sw=srcEl.videoWidth||srcEl.naturalWidth, sh=srcEl.videoHeight||srcEl.naturalHeight;
+    if(!W||!H||!sw||!sh||(srcEl.readyState!==undefined&&srcEl.readyState<2)) return;
+    const cw=Math.max(16,Math.round(W/(S.blur*.8+1))), ch=Math.max(9,Math.round(cw*H/W));
+    if(pc.width!==cw||pc.height!==ch){pc.width=cw;pc.height=ch;cx.imageSmoothingQuality='medium';if('filter' in cx)cx.filter='blur(1px)'}
+    const k=Math.max(W/sw,H/sh), vw=W/k, vh=H/k;
+    cx.drawImage(srcEl,(sw-vw)/2,(sh-vh)/2,vw,vh,0,0,cw,ch);
+  }
+  (function loop(){draw();doc.defaultView.requestAnimationFrame(loop)})();
+  d.style();
+  return d;
+}
+const pv=Display(document,$('#pv'));
+const ds=()=>[pv,popD].filter(Boolean);
+/* видео играет только там, где его реально смотрят: в окне текста, а если оно закрыто, то в превью */
+function syncVideos(){ds().forEach(d=>d.keep(playing&&(d===popD||!popD)))}
+
+function openPop(){
+  if(pop&&!pop.closed){pop.focus();return}
+  pop=window.open('','lyricsWin','width=1100,height=620');
+  if(!pop){st('Браузер заблокировал окно. Разреши всплывающие окна для этой страницы.');return}
+  const doc=pop.document;
+  doc.open();doc.write('<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Текст песни</title></head><body></body></html>');doc.close();
+  const s=doc.createElement('style');s.textContent=css;doc.head.appendChild(s);
+  const r=doc.createElement('div');doc.body.appendChild(r);
+  popD=Display(doc,r);popD.lines(L);if(bgUrl)popD.bg(bgUrl,bgVid);syncVideos();
+  st('Окно текста открыто. Его можно перетащить на другой монитор или на весь экран (F11).');
+}
+$('#win').onclick=openPop;
+addEventListener('beforeunload',()=>{if(pop&&!pop.closed)pop.close()});
+
+async function openPop() {
+  try {
+    const { WebviewWindow } =
+      await import("@tauri-apps/api/webviewWindow");
+
+    const existing = await WebviewWindow.getByLabel("lyrics");
+
+    if (existing) {
+      await existing.setFocus();
+      return;
+    }
+
+    const pop = new WebviewWindow("lyrics", {
+      url: "lyrics.html",
+      title: "Текст песни",
+      width: 1100,
+      height: 620,
+      center: true
+    });
+
+    pop.once("tauri://created", () => {
+      st("Отдельное окно текста открыто.");
+    });
+
+    pop.once("tauri://error", (event) => {
+      console.error("Ошибка создания окна:", event);
+      st("Не удалось открыть окно текста. Подробности в консоли.");
+    });
+  } catch (error) {
+    console.error("Ошибка открытия окна:", error);
+    st("Ошибка открытия окна: " + error);
+  }
+}
+
+/* ---------- общий запуск: музыка + видео + таймер ---------- */
+function go(){
+  playing=true;$('#pp').textContent='Пауза';
+  syncVideos();tm.run();
+  if(au.src&&au.paused)au.play().catch(()=>{});
+}
+function halt(){
+  playing=false;$('#pp').textContent='Старт';
+  syncVideos();tm.pause();
+  if(!au.paused)au.pause();
+}
+$('#pp').onclick=()=>playing?halt():go();
+$('#rs').onclick=()=>{halt();au.currentTime=0;tm.reset();ds().forEach(d=>d.seek(0))};
+au.onplay=()=>{if(!playing)go()};
+au.onpause=()=>{if(playing&&!au.ended)halt()};
+au.onseeked=()=>ds().forEach(d=>d.seek(au.currentTime));
+
+/* ---------- текст и время ---------- */
+function parse(t){
+  const r=[];
+  for(const row of t.split(/\r?\n/)){
+    const ts=[...row.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];
+    if(!ts.length) continue;
+    const tx=row.replace(/\[[^\]]*\]/g,'').trim();
+    ts.forEach(m=>r.push({time:+m[1]*60+ +m[2],text:tx}));
+  }
+  return r.sort((a,b)=>a.time-b.time);
+}
+function setLyrics(a){L=a;ds().forEach(d=>d.lines(a));$('#dlrc').disabled=!a.length}
+function find(t){
+  let lo=0,hi=L.length-1,r=-1;
+  while(lo<=hi){const m=(lo+hi)>>1; if(L[m].time<=t){r=m;lo=m+1}else hi=m-1}
+  return r;
+}
+setInterval(()=>{
+  if(popD&&pop.closed){popD=null;pop=null}
+  const i=find(au.currentTime+off), r=tm.value();
+  ds().forEach(d=>{d.fit();d.show(i);d.timer(r,tm.total)});
+  const n=syncVideos.n=(syncVideos.n||0)+1;
+  if(n%6===0) syncVideos();
+  if(n%12===0){
+    const s=(popD||pv).stat();
+    $('#vs').textContent=s?`Видео: ${s.w}×${s.h}, ${s.e?'ошибка '+s.e:s.p?'пауза':s.rs<3?'буферизация':'играет'}, ${s.t.toFixed(1)} с, пропущено кадров ${s.d} из ${s.n}`:'';
+  } /* раз в ~0,5 с: если браузер остановил видео, запускаем снова */
+},80);
+
+/* ---------- поиск, файлы, скачивание ---------- */
+async function search(){
+  const q=$('#q').value.trim(); if(!q) return;
+  st('Ищу текст…');
+  try{
+    const r=await (await fetch('https://lrclib.net/api/search?q='+encodeURIComponent(q))).json();
+    const d=au.duration||0;
+    const h=r.filter(x=>x.syncedLyrics).sort((a,b)=>Math.abs(a.duration-d)-Math.abs(b.duration-d))[0];
+    if(!h){st('Текста с таймкодами не нашлось. Открой .lrc или разметь вручную.');return}
+    meta=h; setLyrics(parse(h.syncedLyrics)); st(`Найдено: ${h.artistName} — ${h.trackName}. Нажми «Старт».`);
+  }catch(e){st('Не удалось связаться с LRCLIB. Проверь интернет.')}
+}
+$('#sr').onclick=search;
+$('#q').onkeydown=e=>{if(e.key==='Enter')search()};
+$('#fa').onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  halt(); au.src=URL.createObjectURL(f);
+  $('#q').value=f.name.replace(/\.[^.]+$/,'').replace(/_+/g,' ');
+  meta=null; setLyrics([]); au.onloadedmetadata=()=>{search()};
+};
+$('#fl').onchange=async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const a=parse(await f.text()); meta=null; setLyrics(a);
+  st(a.length?`Загружено строк: ${a.length}`:'В файле нет таймкодов');
+};
+const fmt=s=>{const m=Math.floor(s/60);return `[${String(m).padStart(2,'0')}:${(s-m*60).toFixed(2).padStart(5,'0')}]`};
+$('#dlrc').onclick=()=>{
+  const head=meta?`[ar:${meta.artistName}]\n[ti:${meta.trackName}]\n`:'';
+  const name=(meta?`${meta.artistName} - ${meta.trackName}`:($('#q').value||'lyrics')).replace(/[\\/:*?"<>|]/g,'');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([head+L.map(l=>fmt(l.time)+' '+l.text).join('\n')],{type:'text/plain;charset=utf-8'}));
+  a.download=name+'.lrc'; a.click();
+};
+$('#m').onclick=()=>{off-=.5;st('Сдвиг текста: '+off.toFixed(1)+' с')};
+$('#p').onclick=()=>{off+=.5;st('Сдвиг текста: '+off.toFixed(1)+' с')};
+
+/* ---------- настройки, фон, таймер ---------- */
+[['sc','scale','%'],['pw','pw','%'],['ph','ph','%'],['bl','blur',' px'],['tn','tint','%']].forEach(([id,k,u])=>{
+  const e=$('#'+id),o=$('#'+id+'o');
+  e.value=S[k];o.textContent=S[k]+u;
+  e.oninput=()=>{S[k]=+e.value;o.textContent=S[k]+u;save();ds().forEach(d=>d.style())};
+});
+$('#fb').onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  if(bgUrl) URL.revokeObjectURL(bgUrl);
+  bgUrl=URL.createObjectURL(f); bgVid=f.type.startsWith('video')||/\.(mp4|m4v|webm|mov|mkv|ogv|avi)$/i.test(f.name);
+  ds().forEach(d=>d.bg(bgUrl,bgVid));
+};
+$('#fx').onclick=()=>{bgUrl=null;ds().forEach(d=>d.bg(null))};
+$('#tsh').checked=!!S.tsh;
+$('#tsh').onchange=e=>{S.tsh=e.target.checked;save();ds().forEach(d=>d.style())};
+$('#tt').value=S.tt;
+$('#tpos').value=S.tpos||'tc';
+$('#tpos').onchange=e=>{S.tpos=e.target.value;save();ds().forEach(d=>d.style())};
+tm.set(pt(S.tt)||300000);tm.reset();
+$('#tt').onchange=e=>{
+  const ms=pt(e.target.value);
+  if(ms===null||ms<=0){e.target.value=S.tt;st('Время таймера в формате мм:сс, например 05:00');return}
+  S.tt=e.target.value.trim();save();tm.set(ms);
+};
+
+/* ---------- ручная разметка ---------- */
+const hint=()=>$('#hint').textContent=M&&M.r.length<M.t.length?`Следующая строка: «${M.t[M.r.length]}»`:'';
+$('#mk').onclick=()=>{$('#pan').hidden=!$('#pan').hidden};
+$('#go').onclick=e=>{
+  const t=$('#txt').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  if(!t.length) return;
+  M={t,r:[]}; au.currentTime=0; go(); e.target.blur(); hint();
+};
+function stamp(){
+  if(!M) return;
+  M.r.push({time:au.currentTime,text:M.t[M.r.length]});
+  if(M.r.length===M.t.length){meta=null;setLyrics(M.r);M=null;$('#hint').textContent='Готово. Нажми «Скачать .lrc», чтобы не размечать заново.'}
+  else hint();
+}
+$('#tap').onclick=stamp;
+addEventListener('keydown',e=>{if(M&&e.code==='Space'&&e.target.tagName!=='TEXTAREA'){e.preventDefault();stamp()}});
+</script>
+</body>
+</html>

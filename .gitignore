@@ -1,4 +1,17 @@
-node_modules
-dist
-src-tauri/target
-src-tauri/gen
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+*.zip
+*.exe
+*.msi
+*.log
+Thumbs.db
+.DS_Store
+.vscode/
+# личные медиафайлы
+*.mp3
+*.flac
+*.mp4
+*.webm
+*.mov
