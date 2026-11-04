@@ -39,9 +39,7 @@ jobs:
         with:
           # по тегу берём имя тега, при ручном запуске: v + версия из tauri.conf.json
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
-          releaseName: 'Lyrics v__VERSION__'
-          releaseBody: 'Установщик для Windows (Lyrics_*_x64-setup.exe) во вложениях ниже.'
+          releaseName: 'Lyrics Player v__VERSION__'
+          releaseBody: 'Установщик для Windows (*-setup.exe) во вложениях ниже.'
           releaseDraft: true
           prerelease: false
-          # только установщик NSIS (.exe); уберите строку, чтобы собирался ещё и MSI
-          args: --bundles nsis
